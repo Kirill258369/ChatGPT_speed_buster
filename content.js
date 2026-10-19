@@ -13,17 +13,16 @@ function isVisibleElement(element) {
   if (!element) return false;
 
   const style = window.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-
-  return (
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    rect.height > 0
-  );
+  // display:contents wrappers have no box but still contain visible messages.
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (parent.hidden || getComputedStyle(parent).display === 'none') return false;
+  }
+  return true;
 }
 
 function getTurnSections() {
-  return Array.from(document.querySelectorAll('section[data-turn-id]')).filter(isVisibleElement);
+  return BoosterMessages.all().filter(isVisibleElement);
 }
 
 function rememberOriginalStyles(element) {
@@ -96,14 +95,18 @@ async function initialize() {
   }).observe(document.body, { childList: true, subtree: true, characterData: true });
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area !== 'local') return;
-    if (changes[BoosterStore.KEY]) { await loadSettings(); applyBooster(); }
+    if (changes[BoosterStore.KEY]) {
+      const change = changes[BoosterStore.KEY];
+      if (change.oldValue?.messageLimit !== change.newValue?.messageLimit) BoosterTools.resetTemporary();
+      await loadSettings(); applyBooster();
+    }
     if (changes[BoosterStore.EXTRA]) { await BoosterTools.reload(); applyBooster(); }
   });
   chrome.runtime.onMessage.addListener((request, sender, respond) => {
     if (!request.action?.startsWith('chatgpt-speed-booster:')) return;
     (async () => {
       const action = request.action.split(':')[1];
-      if (action === 'apply') { await loadSettings(); applyBooster(); }
+      if (action === 'apply') { if (request.value?.reset) BoosterTools.resetTemporary(); await loadSettings(); applyBooster(); }
       else if (action !== 'get-stats') await BoosterTools.action(action, request.value);
       respond({ ok: true, ...stats, settings, policy: BoosterTools.policy(settings, stats.renderedCount + stats.hiddenCount) });
     })().catch(error => respond({ ok: false, error: error.message }));

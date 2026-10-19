@@ -4,9 +4,9 @@ const BoosterTools = (() => {
   let focus = false;
   const listeners = new Set();
   const notify = () => listeners.forEach(fn => fn());
-  const turns = () => [...document.querySelectorAll('section[data-turn-id]')];
+  const turns = () => BoosterMessages.all();
   const text = element => { const clone = (element.querySelector('[data-message-author-role]') || element).cloneNode(true); clone.querySelectorAll('[data-sb-ui]').forEach(node => node.remove()); return clone.textContent.trim(); };
-  const id = element => element.getAttribute('data-turn-id');
+  const id = element => BoosterMessages.id(element);
   const chatKey = () => location.pathname;
   const chat = () => data['chat:' + chatKey()] || {};
   async function reload() { data = (await chrome.storage.local.get(BoosterStore.EXTRA))[BoosterStore.EXTRA] || {}; notify(); }
@@ -31,6 +31,7 @@ const BoosterTools = (() => {
     element.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
   }
   function release() { revealed?.classList.remove('sb-selected'); revealed = null; api.apply(); }
+  function resetTemporary() { history = false; extra = 0; revealed?.classList.remove('sb-selected'); revealed = null; }
   function search(query, codeOnly = false) {
     const q = query.trim().toLocaleLowerCase();
     return turns().filter(el => (!codeOnly || el.querySelector('pre code')) && (!q || text(el).toLocaleLowerCase().includes(q)));
@@ -102,7 +103,7 @@ const BoosterTools = (() => {
       case 'focus': focus = !focus; document.documentElement.classList.toggle('sb-focus', focus); BoosterPanel.toast(focus ? 'Фокус: боковая панель скрыта' : 'Фокус выключен'); break;
       case 'export-md': exportChat('md'); break;
       case 'export-html': exportChat('html'); break;
-      case 'chat-settings': await saveChat({ messageLimit: value.messageLimit == null ? null : BoosterStore.limit(value.messageLimit), excluded: !!value.excluded }); break;
+      case 'chat-settings': resetTemporary(); await saveChat({ messageLimit: value.messageLimit == null ? null : BoosterStore.limit(value.messageLimit), excluded: !!value.excluded }); break;
       default: throw new Error('Неизвестное действие');
     }
     notify();
@@ -118,6 +119,6 @@ const BoosterTools = (() => {
     // Covers ChatGPT SPA navigation without intercepting application history APIs.
     setInterval(() => { if (route !== location.pathname) api.apply(); }, 700);
   }
-  return { init, reload, policy, isRevealed: element => element === revealed, action, turns, text, id, chat, search, jump, release, bookmark, removeBookmark, copyCode, saveTemplate, deleteTemplate, insertTemplate,
+  return { init, reload, policy, resetTemporary, isRevealed: element => element === revealed, action, turns, text, id, chat, search, jump, release, bookmark, removeBookmark, copyCode, saveTemplate, deleteTemplate, insertTemplate,
     templates: () => data.templates || [], subscribe: fn => listeners.add(fn) };
 })();

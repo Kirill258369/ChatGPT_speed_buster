@@ -1,5 +1,6 @@
 .sb-selected{outline:2px solid #76a8ff!important;outline-offset:6px;border-radius:12px}
-html.sb-collapse-code section[data-turn-id] pre.sb-long-code:not(.sb-code-expanded){max-height:300px;overflow:auto}
+html.sb-collapse-code pre.sb-long-code:not(.sb-code-expanded){max-height:300px;overflow:auto}
 .sb-code-toggle{display:none}
 html.sb-collapse-code .sb-code-toggle{display:block;margin:8px 0;border:1px solid #5875a0;border-radius:8px;background:#17243d;color:#dbe8ff;padding:6px 12px;cursor:pointer;font:12px system-ui}
 html.sb-focus #stage-slideover-sidebar,html.sb-focus #stage-sidebar,html.sb-focus [data-testid="sidebar"]{display:none!important}
+[data-speed-booster-hidden="true"]{display:none!important}

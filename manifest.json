@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Speed Booster",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Ускорение длинных чатов, поиск, закладки и инструменты для комфортной работы с ChatGPT.",
   "permissions": [
     "storage"
@@ -28,6 +28,8 @@
       ],
       "js": [
         "store.js",
+        "messages.js",
+        "ui-icons.js",
         "tools.js",
         "panel.js",
         "content.js"
@@ -36,6 +38,17 @@
         "content.css"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icon.png"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ]
     }
   ]
 }
