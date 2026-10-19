@@ -9,89 +9,54 @@ function scheduleApply() {
   if (applyTimer) return;
   applyTimer = setTimeout(() => { applyTimer = null; applyBooster(); }, 120);
 }
-function isVisibleElement(element) {
-  if (!element) return false;
-
-  const style = window.getComputedStyle(element);
-  // display:contents wrappers have no box but still contain visible messages.
-  if (style.display === 'none' || style.visibility === 'hidden') return false;
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-    if (parent.hidden || getComputedStyle(parent).display === 'none') return false;
-  }
-  return true;
-}
-
+// Preserve the last N complete turns. Hide whole message containers only.
+// Reconcile changes incrementally to prevent viewport jumps while typing.
 function getTurnSections() {
-  return BoosterMessages.all().filter(isVisibleElement);
+  return BoosterMessages.all().filter(el => el.isConnected && !el.closest('[data-sb-ui]'));
 }
-
-function rememberOriginalStyles(element) {
-  if (!element.dataset.speedBoosterOriginalDisplay) {
-    element.dataset.speedBoosterOriginalDisplay = element.style.display || '';
-  }
-}
-
 function hideBlock(element) {
-  rememberOriginalStyles(element);
+  if (hiddenElements.has(element)) return;
+  if (!element.hasAttribute('data-speed-booster-original-display')) {
+    element.setAttribute('data-speed-booster-original-display', element.style.getPropertyValue('display'));
+    element.setAttribute('data-speed-booster-original-priority', element.style.getPropertyPriority('display'));
+  }
   element.setAttribute('data-speed-booster-hidden', 'true');
-  element.style.display = 'none';
+  element.style.setProperty('display', 'none', 'important');
   hiddenElements.add(element);
 }
-
 function showBlock(element) {
+  if (!hiddenElements.has(element)) return;
   element.removeAttribute('data-speed-booster-hidden');
-  element.style.display = element.dataset.speedBoosterOriginalDisplay || '';
+  const original = element.getAttribute('data-speed-booster-original-display') || '';
+  const priority = element.getAttribute('data-speed-booster-original-priority') || '';
+  if (original) element.style.setProperty('display', original, priority);
+  else element.style.removeProperty('display');
   hiddenElements.delete(element);
 }
-
-function restoreAllHidden() {
-  Array.from(hiddenElements).forEach(showBlock);
-}
-
+function restoreAllHidden() { for (const element of [...hiddenElements]) showBlock(element); }
 function applyBooster() {
-  restoreAllHidden();
-
   const sections = getTurnSections();
-
-  if (!sections.length) {
-    stats.renderedCount = 0;
-    stats.hiddenCount = 0;
-    updateUI();
-    return;
-  }
-
   const policy = BoosterTools.policy(settings, sections.length);
-  if (!policy.enabled) {
-    stats.renderedCount = sections.length;
-    stats.hiddenCount = 0;
-    updateUI();
-    return;
-  }
-
   const limit = Math.max(2, Number(policy.messageLimit) || 10);
-  const hideUntilIndex = Math.max(0, sections.length - limit);
-
-  sections.forEach((section, index) => {
-    if (index < hideUntilIndex && !BoosterTools.isRevealed(section)) {
-      hideBlock(section);
-    }
-  });
-
-  stats.hiddenCount = hiddenElements.size;
+  const hiddenBefore = Math.max(0, sections.length - limit);
+  const target = new Set(policy.enabled ? sections.slice(0, hiddenBefore).filter(el => !BoosterTools.isRevealed(el)) : []);
+  for (const element of [...hiddenElements]) if (!element.isConnected || !target.has(element)) showBlock(element);
+  for (const element of target) hideBlock(element);
+  stats.hiddenCount = [...hiddenElements].filter(el => el.isConnected).length;
   stats.renderedCount = sections.length - stats.hiddenCount;
   updateUI();
 }
-
 
 async function initialize() {
   await loadSettings();
   await BoosterTools.init({ apply: applyBooster, settings: () => settings, refresh: async () => { await loadSettings(); applyBooster(); } });
   BoosterPanel.init();
+  BoosterAddon.init();
   applyBooster();
   // Ignore our UI mutations, which otherwise cause an endless apply loop.
   new MutationObserver(records => {
     if (records.some(r => !r.target.closest?.('[data-sb-ui]') &&
-      (r.type === 'characterData' || [...r.addedNodes, ...r.removedNodes].some(n => n.nodeType !== 1 || !n.matches('[data-sb-ui]'))))) scheduleApply();
+      (r.type === 'characterData' ? false : [...r.addedNodes, ...r.removedNodes].some(n => n.nodeType === 1 && !n.closest?.('[data-sb-ui]') && !n.matches?.('[data-sb-ui]'))))) scheduleApply();
   }).observe(document.body, { childList: true, subtree: true, characterData: true });
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area !== 'local') return;

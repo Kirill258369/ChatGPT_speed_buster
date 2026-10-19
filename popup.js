@@ -55,3 +55,11 @@ $('#collapseCode').onchange = () => save({ collapseCode: $('#collapseCode').chec
 document.querySelectorAll('[data-action]').forEach(button => { button.onclick = async () => { try { renderStats(await send(button.dataset.action)); if (['search','bookmarks','navigator','templates'].includes(button.dataset.action)) window.close(); else status('Готово'); } catch (error) { status(error.message); } }; });
 $('#saveChat').onclick = async () => { try { renderStats(await send('chat-settings', { messageLimit: $('#chatLimit').value || null, excluded: $('#excluded').checked })); status('Настройки этого чата сохранены'); } catch (error) { status(error.message); } };
 start().catch(error => status(error.message));
+
+// Productivity add-on: separate from the original acceleration settings.
+const ADDON_KEY='sbProductivityV1';
+document.querySelectorAll('[data-addon]').forEach(button=>button.addEventListener('click',async()=>{
+  try { await sendAddon(button.dataset.addon); window.close(); } catch(e){status(e.message);} }));
+async function sendAddon(mode){ if(!activeTabId) throw new Error('Откройте чат ChatGPT'); try { return await chrome.tabs.sendMessage(activeTabId,{action:'sb-addon-open',mode}); } catch { throw new Error('Обновите вкладку ChatGPT'); } }
+document.querySelector('#openLibrary').onclick=()=>chrome.tabs.create({url:chrome.runtime.getURL('library.html')});
+(async()=>{ const data=(await chrome.storage.local.get(ADDON_KEY))[ADDON_KEY]||{};const el=document.querySelector('#sbTheme');el.value=data.theme||'graphite';document.body.dataset.theme=el.value;el.onchange=async()=>{const latest=(await chrome.storage.local.get(ADDON_KEY))[ADDON_KEY]||{};await chrome.storage.local.set({[ADDON_KEY]:{...latest,theme:el.value}});document.body.dataset.theme=el.value;status('Тема сохранена');};})();

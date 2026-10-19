@@ -1,0 +1,14 @@
+const KEY='sbProductivityV1', EXTRA='chatgptSpeedBoosterTools';let tab='notes', state={}, extra={}, query='';
+const $=s=>document.querySelector(s);
+function el(tag,parent,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;parent?.append(n);return n;}
+function card(title,body,location,actions){const n=el('article',$('#items'),undefined,'card');el('h3',n,title);if(location)el('div',n,location,'small');el('p',n,body);const row=el('div',n,undefined,'actions');for(const [label,fn] of actions){const b=el('button',row,label);b.onclick=fn;}}
+function link(chat){if(!chat)return;const url=new URL(chat);if(!['chatgpt.com','chat.openai.com'].includes(url.hostname))return;chrome.tabs.create({url:url.toString()});}
+async function save(){await chrome.storage.local.set({[KEY]:state});}
+async function init(){const data=await chrome.storage.local.get([KEY,EXTRA]);state=data[KEY]||{};extra=data[EXTRA]||{};render();}
+function render(){const area=$('#items');area.replaceChildren();const ok=v=>String(v||'').toLocaleLowerCase().includes(query.toLocaleLowerCase());let count=0;
+if(tab==='notes'){for(const [key,n] of Object.entries(state.notes||{})){if(!ok(n.note+' '+n.excerpt+' '+n.title))continue;count++;card(n.note,n.excerpt,n.title, [['Открыть чат',()=>link(n.chat)],['Удалить',async()=>{if(!confirm('Удалить заметку?'))return;delete state.notes[key];await save();render();}]]);}}
+if(tab==='drafts'){for(const [key,d] of Object.entries(state.drafts||{})){if(!ok(d.text+' '+d.title))continue;count++;card(d.title||'Черновик',d.text,new Date(d.updated||Date.now()).toLocaleString('ru-RU'),[['Копировать',()=>navigator.clipboard.writeText(d.text)],['Открыть чат',()=>link(key)],['Удалить',async()=>{if(!confirm('Удалить черновик?'))return;delete state.drafts[key];await save();render();}]]);}}
+if(tab==='bookmarks'){for(const [key,c] of Object.entries(extra)){if(!key.startsWith('chat:'))continue;for(const [id,b] of Object.entries(c.bookmarks||{})){if(!ok(b.excerpt))continue;count++;card('Закладка',b.excerpt,key.slice(5),[['Открыть чат',()=>link(key.slice(5).startsWith('http') ? key.slice(5) : 'https://chatgpt.com'+key.slice(5))]]);}}}
+if(tab==='templates'){for(const t of extra.templates||[]){if(!ok(t.name+' '+t.content))continue;count++;card(t.name,t.content,'Шаблон запроса',[['Копировать',()=>navigator.clipboard.writeText(t.content)]]);}}
+$('#count').textContent='Записей: '+count;if(!count)el('p',area,'Пока нет сохранённых записей. Откройте чат и добавьте материал через инструменты Speed Booster.','small');}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('nav button').forEach(n=>n.setAttribute('aria-pressed',String(n===b)));render();});$('#query').oninput=e=>{query=e.target.value;render();};init();
