@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Speed Booster",
-  "version": "1.0.1",
-  "description": "Убирает подвисания и лаги в длинных чатах с ChatGPT.",
+  "version": "2.0.0",
+  "description": "Ускорение длинных чатов, поиск, закладки и инструменты для комфортной работы с ChatGPT.",
   "permissions": [
     "storage"
   ],
@@ -27,6 +27,9 @@
         "https://chat.openai.com/*"
       ],
       "js": [
+        "store.js",
+        "tools.js",
+        "panel.js",
         "content.js"
       ],
       "css": [

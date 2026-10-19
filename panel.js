@@ -1,0 +1,65 @@
+const BoosterPanel = (() => {
+  let root, panel, current = 'search', searchTimer, results = [], cursor = -1, route = location.pathname;
+  const $ = selector => root.querySelector(selector);
+  const el = (tag, text, cls) => { const n = document.createElement(tag); if (text) n.textContent = text; if (cls) n.className = cls; return n; };
+  function button(label, fn, parent) { const n = el('button', label); n.type = 'button'; n.onclick = () => Promise.resolve().then(fn).catch(e => toast(e.message)); if (parent) parent.append(n); return n; }
+  function toast(message) { $('#notice').textContent = message; clearTimeout(toast.timer); toast.timer = setTimeout(() => { $('#notice').textContent = ''; }, 5000); }
+  function init() {
+    const host = el('div'); host.id = 'sb-workspace'; host.dataset.sbUi = 'true'; root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = `<style>
+      :host{all:initial;position:fixed;top:90px;right:18px;z-index:2147483646;font:13px/1.5 system-ui;color:#eef2ff;color-scheme:dark}*{box-sizing:border-box}button,input,textarea{font:inherit;color:inherit}button{cursor:pointer;border:1px solid #33425d;background:#202e49;border-radius:10px;padding:8px 11px;transition:background .15s}button:hover{background:#304467}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #8ab5ff;outline-offset:2px}button:disabled{opacity:.45;cursor:default}
+      #trigger{float:right;background:linear-gradient(120deg,#244a8a,#263352);box-shadow:0 8px 30px #0004;border-color:#6b96d366;border-radius:14px}#panel{clear:both;position:relative;top:10px;width:min(360px,calc(100vw - 32px));max-height:calc(100dvh - 160px);overflow:auto;overscroll-behavior:contain;background:#101a2ef5;border:1px solid #435779;border-radius:18px;padding:16px;box-shadow:0 20px 70px #0007;backdrop-filter:blur(18px);animation:enter .16s ease}
+      [hidden]{display:none!important}.row{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}.row>*{min-width:0}h2{font-size:15px;margin:0}p{color:#aabbd7;font-size:12px;margin:8px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:12px 0}input,textarea{width:100%;border:1px solid #3d506f;border-radius:9px;background:#0c1528;padding:9px}input[type=checkbox]{width:auto}textarea{resize:vertical;min-height:85px}#list{display:grid;gap:8px;max-height:300px;overflow:auto;margin-top:12px}.item{border:1px solid #2e405f;border-radius:12px;padding:10px;background:#18253d}.item>button:first-child{text-align:left;width:100%;background:transparent;border:0;padding:0;overflow-wrap:anywhere}.item .row{margin:8px 0 0;flex-wrap:wrap;justify-content:flex-start}.item .row button{font-size:11px;padding:5px 8px}#notice{max-width:360px;background:#111d32;color:#9ee5dc;border-radius:8px;clear:both;margin-top:14px}#notice:not(:empty){padding:10px}#summary{font-size:12px;color:#aabbd7}#tabs{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0}#tabs button{padding:6px 8px;font-size:12px}#tabs button[aria-pressed=true]{background:#315a96}label{display:block;color:#b7c8e6;font-size:12px;margin:8px 0}#count{color:#9bbcf6;font-size:12px}#template-form{display:grid;gap:8px}@keyframes enter{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+      </style><button id="trigger" aria-expanded="false" aria-controls="panel" title="Открыть Speed Booster">ϟ Speed Booster</button>
+      <section id="panel" hidden aria-label="Speed Booster"><div class="row"><h2>ϟ Speed Booster</h2><button id="close" aria-label="Закрыть панель">✕</button></div><div id="summary"></div><div class="grid" id="actions"></div><div id="tabs"></div><p>Поиск и экспорт — только по сообщениям, доступным на странице.</p>
+      <div id="search-tools"><label for="query">Поиск по тексту сообщений</label><input id="query" type="search" placeholder="Найти в этом чате…"><label><input id="code-only" type="checkbox"> Только сообщения с кодом</label><div class="row"><span id="count" role="status"></span><div id="navigation"></div></div></div>
+      <div id="template-form" hidden><input id="template-name" aria-label="Название шаблона" placeholder="Название шаблона" maxlength="100"><textarea id="template-text" aria-label="Текст шаблона" placeholder="Текст запроса"></textarea><button id="save-template">Сохранить шаблон</button></div><div id="list"></div>
+      <details><summary>Настройки этого чата</summary><label for="chat-limit">Лимит (пусто — общий)</label><input id="chat-limit" type="number" min="2" max="100"><label><input id="chat-excluded" type="checkbox"> Исключить из ускорения</label><button id="save-chat">Применить для чата</button></details></section><div id="notice" role="status" aria-live="polite"></div>`;
+    document.body.append(host); panel = $('#panel');
+    $('#trigger').onclick = () => panel.hidden ? open(current) : close(); $('#close').onclick = close;
+    root.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); close(); $('#trigger').focus(); } });
+    for (const [key,label] of [['toggle','Ускорение'],['more','Ещё 10 сообщений'],['show-all','Показать историю'],['reset','Вернуть лимит'],['focus','Фокус-режим'],['export-md','Экспорт .md'],['export-html','Экспорт .html']]) { const n = button(label, () => BoosterTools.action(key), $('#actions')); n.dataset.action = key; }
+    for (const [key,label] of [['search','Поиск'],['bookmarks','Закладки'],['navigator','Навигатор'],['templates','Шаблоны']]) { const n = button(label, () => open(key), $('#tabs')); n.dataset.tab = key; }
+    button('↻', render, $('#navigation')).setAttribute('aria-label','Обновить результаты');
+    button('↑', () => move(-1), $('#navigation')).setAttribute('aria-label','Предыдущий результат'); button('↓', () => move(1), $('#navigation')).setAttribute('aria-label','Следующий результат');
+    $('#query').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(render, 180); }; $('#code-only').onchange = render;
+    $('#query').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); move(e.shiftKey ? -1 : 1); } };
+    $('#save-chat').onclick = () => BoosterTools.action('chat-settings', { messageLimit: $('#chat-limit').value || null, excluded: $('#chat-excluded').checked }).catch(e => toast(e.message));
+    $('#save-template').onclick = async () => { try { await BoosterTools.saveTemplate($('#template-name').value, $('#template-text').value); $('#template-name').value = ''; $('#template-text').value = ''; render(); } catch (e) { toast(e.message); } };
+    BoosterTools.subscribe(() => { if (!panel.hidden) render(); });
+  }
+  function open(tab) { current = tab; panel.hidden = false; $('#trigger').setAttribute('aria-expanded','true'); $('#chat-limit').value = BoosterTools.chat().messageLimit ?? ''; $('#chat-excluded').checked = !!BoosterTools.chat().excluded; render(); if (tab === 'search') $('#query').focus(); }
+  function close() { panel.hidden = true; $('#trigger').setAttribute('aria-expanded','false'); BoosterTools.release(); }
+  function move(delta) { if (!results.length) return; cursor = (cursor + delta + results.length) % results.length; BoosterTools.jump(results[cursor]); $('#count').textContent = `${cursor + 1} / ${results.length}`; }
+  function render() {
+    if (!root || panel.hidden) return;
+    if (route !== location.pathname) { route = location.pathname; $('#chat-limit').value = BoosterTools.chat().messageLimit ?? ''; $('#chat-excluded').checked = !!BoosterTools.chat().excluded; }
+    root.querySelectorAll('[data-tab]').forEach(n => n.setAttribute('aria-pressed',String(n.dataset.tab === current)));
+    $('#search-tools').hidden = current !== 'search'; $('#template-form').hidden = current !== 'templates'; const list = $('#list'); list.replaceChildren();
+    if (current === 'templates') {
+      BoosterTools.templates().forEach(t => { const item = el('div',null,'item'); item.append(el('strong',t.name)); const row = el('div',null,'row'); button('Вставить', () => BoosterTools.insertTemplate(t), row); button('Копировать', async () => { await navigator.clipboard.writeText(t.content); toast('Шаблон скопирован'); }, row); button('Удалить', () => BoosterTools.deleteTemplate(t.id), row); item.append(row); list.append(item); });
+    } else if (current === 'bookmarks') {
+      Object.entries(BoosterTools.chat().bookmarks || {}).forEach(([key,saved]) => { const item = el('div',null,'item'); const target = BoosterTools.turns().find(turn => BoosterTools.id(turn) === key); button(saved.excerpt || 'Сообщение', () => BoosterTools.jump(target), item); if (!target) item.append(el('p','Сейчас недоступно на странице')); button('Удалить закладку', () => BoosterTools.removeBookmark(key), item); list.append(item); });
+    } else {
+      results = current === 'search' ? BoosterTools.search($('#query').value, $('#code-only').checked) : BoosterTools.turns(); cursor = -1; $('#count').textContent = `Сообщений: ${results.length}`;
+      let offset = 0; const more = button('Следующие 50', appendPage);
+      function appendPage() { more.remove(); results.slice(offset, offset + 50).forEach(turn => { const item = el('div',null,'item'); button(BoosterTools.text(turn).slice(0,160) || 'Сообщение', () => BoosterTools.jump(turn), item); const row = el('div',null,'row'); button(BoosterTools.chat().bookmarks?.[BoosterTools.id(turn)] ? '★ Убрать' : '☆ Закладка', () => BoosterTools.bookmark(turn), row); if (turn.querySelector('pre code')) { button('Копировать код', () => BoosterTools.copyCode(turn,false), row); button('С именами', () => BoosterTools.copyCode(turn,true), row); } item.append(row); list.append(item); }); offset += 50; if (offset < results.length) list.append(more); }
+      appendPage();
+    }
+    if (!list.childElementCount) list.append(el('p',current === 'templates' ? 'Сохраните первый шаблон выше.' : current === 'bookmarks' ? 'Добавьте закладку из поиска или навигатора.' : 'Сообщения не найдены.'));
+  }
+  function update(next) {
+    if (!root) return;
+    const summary = `${next.renderedCount + next.hiddenCount} доступно · ${next.hiddenCount} скрыто · лимит ${next.policy.messageLimit}`;
+    if ($('#summary').textContent !== summary) $('#summary').textContent = summary;
+    $('[data-action=toggle]').textContent = next.settings.enabled ? 'Ускорение: вкл' : 'Ускорение: выкл'; $('[data-action=toggle]').setAttribute('aria-pressed',String(next.settings.enabled));
+    $('[data-action=show-all]').textContent = next.policy.history ? 'Свернуть историю' : 'Показать историю'; $('[data-action=more]').disabled = next.hiddenCount === 0; $('#trigger').textContent = `ϟ ${next.policy.enabled ? 'Ускорение' : 'Пауза'} · ${next.hiddenCount}`;
+    document.documentElement.classList.toggle('sb-collapse-code', !!next.settings.collapseCode);
+    if (next.settings.collapseCode) document.querySelectorAll('section[data-turn-id] pre').forEach(pre => {
+      if (!pre.querySelector('code') || pre.querySelector('code').textContent.split('\n').length < 16 || pre.nextElementSibling?.matches('[data-sb-code]')) return;
+      const control = el('button','Развернуть / свернуть код','sb-code-toggle'); control.type = 'button'; control.dataset.sbUi = 'true'; control.dataset.sbCode = 'true'; control.setAttribute('aria-expanded','false');
+      control.onclick = () => control.setAttribute('aria-expanded',String(pre.classList.toggle('sb-code-expanded'))); pre.classList.add('sb-long-code'); pre.after(control);
+    });
+  }
+  return { init, open, update, toast };
+})();
